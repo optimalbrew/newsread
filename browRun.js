@@ -16,7 +16,7 @@ if (scriptElement) {
 
     // Specify fields you're interested in here
     const selectedData = {
-      aiSummary: jsonData.props.pageProps.story.aiSummary.text,
+      //aiSummary: jsonData.props.pageProps.story.aiSummary.text,
       body: jsonData.props.pageProps.story.body.content,
     };
 

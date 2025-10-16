@@ -1,57 +1,87 @@
-//"Complete" is an attempt to get all paragraph data, including those where the text is inside an entity property
-/* Assuming your script tag is something like this:
-
-<script id="targetScript" type="application/json">
-  {"name": "John", "age": 30, "location": {"city": "New York", "country": "USA"}}
-</script>
-*/
-
-// Replace 'targetScript' with your actual script element ID
-const scriptElement = document.getElementById('__NEXT_DATA__'); //this is the tag we're looking for
-
-if (scriptElement) {
-  try {
-    // Parse the JSON content from script element
-    const jsonData = JSON.parse(scriptElement.textContent);
-
-    // Specify fields you're interested in here
-    const selectedData = {
-      //aiSummary: jsonData.props.pageProps.story.aiSummary.text,
-      body: jsonData.props.pageProps.story.body.content,
-    };
-
-    // selectedData.body contains some elements of type paragraph 
-    const paragraphs = selectedData.body.filter(item => item.type === 'paragraph');
-    
-    // the paragraphs are themselves arrays of objects, so we need to go through each one
-    // This will also include the text from any entities that are part of the paragraph
-    const paragraphTexts = paragraphs.map(item => item.content.map(
-      /** BUG: the order matters. If we switch to 'text' first and 'entity' later, then `c.content` is undefined. 
-       * but console.log still shows the text.
-       * not sure why this happens. Not debugging it for now. 
-      */
-      c => {
-        if (c.type === 'entity') {
-          //console.log(c.content[0].value);
-          return c.content[0].value; // Assuming the entity has a 'value' property
-        } else if (c.type = 'text') {
-          return c.value;
-        } else {
-          return '';
-        }
-      }
-    ).join(' ')).join(' '); 
-
-    //console.log(paragraphTexts);
-    selectedData.body = paragraphTexts;
-    // Use <pre> instead of <p> for better readability if the output really is pre-structured JSON
-    document.body.innerHTML = '<p>' + JSON.stringify(selectedData, null, 2) + '</p>';
-
-    //console.log(selectedData);
-
-  } catch (error) {
-    console.error('Failed to parse JSON:', error);
+(function() {
+  // Find the script tag with id "__NEXT_DATA__"
+  const scriptElement = document.getElementById('__NEXT_DATA__');
+  
+  if (!scriptElement) {
+      console.error('__NEXT_DATA__ script tag not found');
+      return;
   }
-} else {
-  console.error('Script element not found!');
-}
+  
+  try {
+      // Parse the JSON content from script element
+      const jsonData = JSON.parse(scriptElement.textContent);
+      
+      // Check if the expected structure exists
+      if (jsonData.props && jsonData.props.pageProps && jsonData.props.pageProps.story) {
+          const story = jsonData.props.pageProps.story;
+          console.log('Story object found with keys:', Object.keys(story));
+          
+          if (story.body && story.body.content) {
+              console.log('Found body.content');
+              
+              // Extract text from the content structure
+              const extractedText = extractTextFromContent(story.body.content);
+              
+              console.log(`Extracted ${extractedText.length} characters`);
+              
+              // Insert the extracted text into the document body
+              document.body.innerHTML = `
+                  <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; line-height: 1.6; background: white; color: black;">
+                      <h1 style="color: #333; border-bottom: 2px solid #333; padding-bottom: 10px;">Extracted Article Text</h1>
+                      <div style="white-space: pre-wrap; font-size: 16px;">${extractedText}</div>
+                      <div style="margin-top: 20px; padding: 10px; background: #f0f0f0; border-radius: 5px; font-size: 14px; color: #666;">
+                          <strong>Character count:</strong> ${extractedText.length}
+                      </div>
+                  </div>
+              `;
+              
+              return extractedText;
+          } else {
+              console.error('No body.content found in story object');
+              return null;
+          }
+      } else {
+          console.error('Expected data structure not found');
+          return null;
+      }
+  } catch (e) {
+      console.error('Error parsing __NEXT_DATA__:', e.message);
+      return null;
+  }
+  
+  // Helper function to extract text from Next.js content structure
+  function extractTextFromContent(content) {
+      let text = '';
+      
+      if (Array.isArray(content)) {
+          content.forEach(item => {
+              text += extractTextFromContent(item);
+          });
+      } else if (typeof content === 'object' && content !== null) {
+          // Handle the specific structure we found: {type: "paragraph", content: [...]}
+          if (content.type === 'paragraph' && content.content) {
+              // Check if this paragraph contains "Read More:" text
+              const paragraphText = extractTextFromContent(content.content);
+              if (paragraphText.includes('Read More:')) {
+                  // Skip this paragraph
+                  return '';
+              }
+              text += paragraphText;
+          } else if (content.type === 'text' && content.value) {
+              text += content.value + ' ';
+          } else if (content.text) {
+              text += content.text + ' ';
+          } else if (content.content) {
+              text += extractTextFromContent(content.content);
+          } else if (content.children) {
+              text += extractTextFromContent(content.children);
+          } else if (content.value) {
+              text += content.value + ' ';
+          }
+      } else if (typeof content === 'string') {
+          text += content + ' ';
+      }
+      
+      return text;
+  }
+})();
